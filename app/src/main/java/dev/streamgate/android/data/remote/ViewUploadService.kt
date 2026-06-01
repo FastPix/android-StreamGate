@@ -9,7 +9,10 @@ import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
-import dagger.hilt.android.AndroidEntryPoint
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
 import dev.streamgate.android.MainActivity
 import dev.streamgate.android.data.repository.UploadRepository
 import dev.streamgate.android.data.repository.UploadStatus
@@ -21,12 +24,21 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.util.Locale
-import javax.inject.Inject
 
-@AndroidEntryPoint
 class VideoUploadService: Service() {
 
-    @Inject lateinit var repository: UploadRepository
+    @EntryPoint
+    @InstallIn(SingletonComponent::class)
+    interface VideoUploadServiceEntryPoint {
+        fun uploadRepository(): UploadRepository
+    }
+
+    private val uploadRepository: UploadRepository by lazy {
+        EntryPointAccessors.fromApplication(
+            applicationContext,
+            VideoUploadServiceEntryPoint::class.java
+        ).uploadRepository()
+    }
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var uploadJob: Job? = null
@@ -53,16 +65,16 @@ class VideoUploadService: Service() {
                 startUploadPipeline(filePath, sessionUri, uploadId)
             }
             ACTION_PAUSE -> {
-                repository.pauseActiveUpload()
+                uploadRepository.pauseActiveUpload()
                 updateNotification(progress, isPaused = true) // Retain current look as paused
             }
             ACTION_RESUME -> {
-                repository.resumeActiveUpload()
+                uploadRepository.resumeActiveUpload()
                 updateNotification(progress, isPaused = false)
             }
             ACTION_CANCEL -> {
                 uploadJob?.cancel()
-                repository.abortActiveUpload()
+                uploadRepository.abortActiveUpload()
                 stopSelf()
             }
         }
@@ -72,8 +84,8 @@ class VideoUploadService: Service() {
     private fun startUploadPipeline(filePath: String, sessionUri: String, uploadId: String) {
         uploadJob?.cancel()
         uploadJob = serviceScope.launch {
-            repository.executeUpload(filePath, sessionUri, uploadId).collect { status ->
-                repository.updateSharedState(status)
+            uploadRepository.executeUpload(filePath, sessionUri, uploadId).collect { status ->
+                uploadRepository.updateSharedState(status)
                 when (status) {
                     is UploadStatus.Progress -> {
                         progress = status.percentage
@@ -170,7 +182,7 @@ class VideoUploadService: Service() {
 
     override fun onTimeout(startId: Int) {
         super.onTimeout(startId)
-        repository.abortActiveUpload()
+        uploadRepository.abortActiveUpload()
         stopSelf()
     }
 

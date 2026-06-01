@@ -1,9 +1,7 @@
 package dev.streamgate.android.data.repository
 
 import android.content.Context
-import android.util.Base64
 import android.util.Log
-import dev.streamgate.android.BuildConfig
 import dev.streamgate.android.data.remote.FastPixApi
 import dev.streamgate.android.data.remote.model.request.PushMediaSettings
 import dev.streamgate.android.data.remote.model.request.UploadRequest
@@ -24,6 +22,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import retrofit2.Response
 import java.io.File
 import java.io.IOException
 
@@ -31,6 +30,10 @@ class UploadRepository @Inject constructor(
     private val fastPixApi: FastPixApi,
     private val context: Context
 ) {
+
+    companion object {
+        private const val TAG = "FastPixUploadRepository"
+    }
 
     @Volatile
     private var activeSdkInstance: FastPixUploader? = null
@@ -46,12 +49,8 @@ class UploadRepository @Inject constructor(
         optimizeAudio: Boolean? = null
     ): NewUpload {
 
-        val credentials = "${BuildConfig.FASTPIX_TOKEN_ID}:${BuildConfig.FASTPIX_SECRET_KEY}"
-        val auth = "Basic " + Base64.encodeToString(credentials.toByteArray(), Base64.NO_WRAP)
-
         return try {
             val response = fastPixApi.initiateAndGetSessionUri(
-                authHeader = auth,
                 request = UploadRequest(
                     corsOrigin = "*",
                     pushMediaSettings = PushMediaSettings(
@@ -68,29 +67,25 @@ class UploadRepository @Inject constructor(
             if (response.isSuccessful) {
                 val data = response.body()?.data
                 if (data?.url == null) {
-                    Log.wtf("FastPixUploadsRepository", "Missing URL or Upload ID in response: ${response.body()}")
+                    Log.wtf(TAG, "Missing URL or Upload ID in response: ${response.body()}")
                     return NewUpload(error = "Invalid response from server: Missing URL or Upload ID")
                 }
                 return NewUpload(sessionUri = data.url, uploadId = data.uploadId)
             }
             else {
-                val errorCode = response.code()
-                val errorString = response.errorBody()?.string() ?: "Unknown error"
-                Log.wtf("FastPixUploadsRepository", "Upload URL request failed: $errorCode $errorString")
+                val (errorCode, errorString) = getErrorFromResponse(response)
+                Log.wtf(TAG, "Upload URL request failed: $errorCode $errorString")
                 return NewUpload(errorCode = errorCode, error = errorString)
             }
         } catch (e: Exception) {
-            Log.wtf("FastPixUploadsRepository", e)
+            Log.wtf(TAG, e)
             NewUpload(error = e.message ?: "Failed to get Session Uri")
         }
     }
 
     suspend fun getMediaId(uploadId: String): Triple<Boolean, String?, String?> {
-        val credentials = "${BuildConfig.FASTPIX_TOKEN_ID}:${BuildConfig.FASTPIX_SECRET_KEY}"
-        val auth = "Basic " + Base64.encodeToString(credentials.toByteArray(), Base64.NO_WRAP)
-
         return try {
-            val response = fastPixApi.getMediaInfo(authHeader = auth, uploadId = uploadId)
+            val response = fastPixApi.getMediaInfo(uploadId = uploadId)
             if (response.isSuccessful) {
                 val mediaResponse = response.body()
                 val data = mediaResponse?.data
@@ -98,7 +93,7 @@ class UploadRepository @Inject constructor(
                 val playbackIdsList = data?.playbackIds
 
                 if (status == null) {
-                    Log.wtf("FastPixUploadRepository", "Missing status in response: ${response.body()}")
+                    Log.wtf(TAG, "Missing status in response: ${response.body()}")
                     return Triple(false, "Invalid response from server: Missing status", status)
                 }
 
@@ -107,28 +102,27 @@ class UploadRepository @Inject constructor(
                     if (firstId != null) {
                         Triple(true, firstId, status)
                     } else {
-                        Log.wtf("FastPixUploadRepository", "Missing playback IDs in response: ${response.body()}")
+                        Log.wtf(TAG, "Missing playback IDs in response: ${response.body()}")
                         Triple(false, "Invalid response from server: Missing playback IDs", status)
                     }
                 } else if (status.lowercase().contains("failed")) {
-                    Log.wtf("FastPixUploadRepository", "Upload failed according to status: ${response.body()}")
+                    Log.wtf(TAG, "Upload failed according to status: ${response.body()}")
                     Triple(false, "Upload failed: $status", status)
                 } else {
-                    Log.wtf("FastPixUploadRepository", "Media not ready yet: $status")
+                    Log.wtf(TAG, "Media not ready yet: $status")
                     Triple(true, null, status)
                 }
             } else {
-                val errorCode = response.code()
-                val errorString = response.errorBody()?.string() ?: "Unknown error"
+                val (errorCode, errorString) = getErrorFromResponse(response)
                 if ("media workspace relation not found" in errorString.lowercase()) {
                     return Triple(true, null, null)
                 }
 
-                Log.wtf("FastPixUploadRepository", "Media info request failed: $errorCode $errorString")
+                Log.wtf(TAG, "Media info request failed: $errorCode $errorString")
                 Triple(false, "Failed to retrieve media info: $errorCode $errorString", null)
             }
         } catch (e: Exception) {
-            Log.wtf("FastPixUploadRepository", e)
+            Log.wtf(TAG, e)
             Triple(false, e.message ?: "Failed to retrieve media info", null)
         }
     }
@@ -137,28 +131,24 @@ class UploadRepository @Inject constructor(
         emit(ApiResult.Loading)
 
         try {
-            val credentials = "${BuildConfig.FASTPIX_TOKEN_ID}:${BuildConfig.FASTPIX_SECRET_KEY}"
-            val auth = "Basic " + Base64.encodeToString(credentials.toByteArray(), Base64.NO_WRAP)
-
-            val response = fastPixApi.listMedia(authHeader = auth, limit = limit, offset = offset, orderBy = orderBy)
+            val response = fastPixApi.listMedia(limit = limit, offset = offset, orderBy = orderBy)
             if (response.isSuccessful) {
                 val mediaList = response.body()?.data ?: emptyList()
                 emit(ApiResult.Success(mediaList))
             } else {
-                val errorCode = response.code()
-                val errorString = response.errorBody()?.string() ?: "Unknown error"
-                Log.wtf("FastPixUploadRepository", "List media request failed: $errorCode $errorString")
+                val (errorCode, errorString) = getErrorFromResponse(response)
+                Log.wtf(TAG, "List media request failed: $errorCode $errorString")
                 emit(ApiResult.Error(
                     errorCode = errorCode,
                     errorMessage = errorString
                 ))
             }
         } catch (e: IOException) {
-            Log.e("FastPixUploadRepository", "Network failure", e)
+            Log.e(TAG, "Network failure", e)
             emit(ApiResult.Error(errorCode = null, errorMessage = "No internet connection"))
         } catch (e: Exception) {
-            Log.e("FastPixUploadRepository", "Unexpected error", e)
-            emit(ApiResult.Error(errorCode = null, errorMessage = e.localizedMessage ?: "Unknown error"))
+            Log.e(TAG, "Unexpected error", e)
+            emit(ApiResult.Error(errorCode = null, errorMessage = e.localizedMessage ?: "An unexpected error occurred"))
         }
     }.flowOn(Dispatchers.IO)
 
@@ -252,6 +242,9 @@ class UploadRepository @Inject constructor(
     }
 
     private fun cleanupSession() { activeSdkInstance = null }
+
+    private fun <T> getErrorFromResponse(response: Response<T>): Pair<Int?, String> =
+        response.code() to (response.errorBody()?.string() ?: "Unknown error")
 }
 
 sealed interface UploadStatus {

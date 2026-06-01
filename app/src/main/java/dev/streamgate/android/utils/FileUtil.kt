@@ -3,6 +3,7 @@ package dev.streamgate.android.utils
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.util.Log
 import dev.streamgate.android.ui.screen.home.VideoSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -11,6 +12,8 @@ import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+private const val TAG = "FileUtil"
 
 
 fun getNewUploadName(source: String): String {
@@ -61,7 +64,7 @@ suspend fun copyUriToInternalStorage(context: Context, uri: Uri, fileName: Strin
             }
             cacheFile.absolutePath
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Error copying URI to internal storage: ${e.localizedMessage}", e)
             null
         }
     }

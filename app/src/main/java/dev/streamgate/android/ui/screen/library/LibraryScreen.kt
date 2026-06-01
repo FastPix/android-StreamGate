@@ -144,7 +144,7 @@ fun MediaUpload(
             .fillMaxSize()
             .background(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.medium)
             .clickable(interactionSource = null, indication = null) {
-                onPreview(mediaId ?: "")
+                onPreview(mediaId.orEmpty())
             },
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
