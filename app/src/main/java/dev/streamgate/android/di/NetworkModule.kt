@@ -1,15 +1,17 @@
 package dev.streamgate.android.di
 
+import android.util.Base64
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import dev.streamgate.android.BuildConfig
 import dev.streamgate.android.data.remote.FastPixApi
 import dev.streamgate.android.utils.API_BASE_URL
 import kotlinx.serialization.json.Json
+import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
-import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import javax.inject.Singleton
@@ -31,12 +33,26 @@ class NetworkModule {
 
         val contentType = "application/json".toMediaType()
 
-        val loggingInterceptor = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+//        val loggingInterceptor = HttpLoggingInterceptor().apply {
+//            level = HttpLoggingInterceptor.Level.BODY
+//        }
+
+        val authInterceptor = Interceptor { chain ->
+            val originalRequest = chain.request()
+
+            val credentials = "${BuildConfig.FASTPIX_TOKEN_ID}:${BuildConfig.FASTPIX_SECRET_KEY}"
+            val auth = "Basic " + Base64.encodeToString(credentials.toByteArray(), Base64.NO_WRAP)
+
+            val requestWithHeaders = originalRequest.newBuilder()
+                .header("Authorization", auth)
+                .build()
+
+            chain.proceed(requestWithHeaders)
         }
 
         val okHttpClient = OkHttpClient.Builder()
-            .addInterceptor(loggingInterceptor)
+//            .addInterceptor(loggingInterceptor)
+            .addInterceptor(authInterceptor)
             .build()
 
         return Retrofit.Builder()

@@ -24,10 +24,29 @@ import java.io.File
 
 class ScreenRecordService: Service() {
 
+    companion object {
+        private const val TAG = "ScreenRecordService"
+
+        const val ACTION_RECORD_COMPLETE = "SCREEN_RECORD_COMPLETE"
+        const val ACTION_STOP_SERVICE = "STOP_SERVICE"
+
+        const val EXTRA_RESULT_CODE = "EXTRA_RESULT_CODE"
+        const val EXTRA_DATA = "EXTRA_DATA"
+        const val EXTRA_FRAME_RATE = "EXTRA_FRAME_RATE"
+        const val EXTRA_FILE_PATH = "EXTRA_FILE_PATH"
+
+        private const val NOTIFICATION_CHANNEL_ID = "screen_record_channel"
+        private const val NOTIFICATION_CHANNEL_NAME = "Screen Recording Service"
+        private const val NOTIFICATION_ID = 101
+        private const val VIRTUAL_DISPLAY_NAME = "ScreenCapture"
+    }
+
     private var mediaProjection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var mediaRecorder: MediaRecorder? = null
-    private lateinit var outputFile: File
+    private val outputFile: File by lazy {
+        createVideoFile(applicationContext, VideoSource.SCREEN_RECORD.name)
+    }
 
     override fun onBind(p0: Intent?): IBinder? = null
 
@@ -57,7 +76,7 @@ class ScreenRecordService: Service() {
         try {
             startRecording(resultCode, resultData, frameRate)
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Failed to start screen recording", e)
             stopSelf()
         }
 
@@ -113,8 +132,6 @@ class ScreenRecordService: Service() {
     }
 
     private fun startRecording(resultCode: Int, data: Intent, frameRate: Int) {
-        outputFile = createVideoFile(applicationContext, VideoSource.SCREEN_RECORD.name)
-
         val projectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         mediaProjection = projectionManager.getMediaProjection(resultCode, data)
 
@@ -182,7 +199,7 @@ class ScreenRecordService: Service() {
         virtualDisplay?.release()
         virtualDisplay = null
 
-        val path = if (::outputFile.isInitialized && outputFile.exists() && outputFile.length() > 0) outputFile.absolutePath else ""
+        val path = if (outputFile.exists() && outputFile.length() > 0) outputFile.absolutePath else ""
 
         if (path.isNotEmpty()) {
             val completeIntent = Intent(ACTION_RECORD_COMPLETE).apply {
@@ -191,7 +208,7 @@ class ScreenRecordService: Service() {
             }
             sendBroadcast(completeIntent)
         } else {
-            Log.e("ScreenRecordService", "Recording failed or output file is empty.")
+            Log.e(TAG, "Recording failed or output file is empty.")
         }
 
         val launchIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
@@ -220,21 +237,6 @@ class ScreenRecordService: Service() {
             windowManager.defaultDisplay.getRealMetrics(displayMetrics)
             Pair(displayMetrics.widthPixels, displayMetrics.heightPixels)
         }
-    }
-
-    companion object {
-        const val ACTION_RECORD_COMPLETE = "SCREEN_RECORD_COMPLETE"
-        const val ACTION_STOP_SERVICE = "STOP_SERVICE"
-
-        const val EXTRA_RESULT_CODE = "EXTRA_RESULT_CODE"
-        const val EXTRA_DATA = "EXTRA_DATA"
-        const val EXTRA_FRAME_RATE = "EXTRA_FRAME_RATE"
-        const val EXTRA_FILE_PATH = "EXTRA_FILE_PATH"
-
-        private const val NOTIFICATION_CHANNEL_ID = "screen_record_channel"
-        private const val NOTIFICATION_CHANNEL_NAME = "Screen Recording Service"
-        private const val NOTIFICATION_ID = 101
-        private const val VIRTUAL_DISPLAY_NAME = "ScreenCapture"
     }
 
 }

@@ -26,8 +26,8 @@ android {
             localPropertiesFile.inputStream().use { localProperties.load(it) }
         }
 
-        val fastPixTokenId = localProperties.getProperty("fastpix.tokenId") ?: ""
-        val fastPixSecretKey = localProperties.getProperty("fastpix.secretKey") ?: ""
+        val fastPixTokenId = localProperties.getProperty("fastpix.tokenId").orEmpty()
+        val fastPixSecretKey = localProperties.getProperty("fastpix.secretKey").orEmpty()
 
         buildConfigField("String", "FASTPIX_TOKEN_ID", "\"$fastPixTokenId\"")
         buildConfigField("String", "FASTPIX_SECRET_KEY", "\"${fastPixSecretKey}\"")

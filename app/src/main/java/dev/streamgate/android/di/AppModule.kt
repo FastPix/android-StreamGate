@@ -19,8 +19,6 @@ class AppModule {
     fun provideUploadRepository(
         fastPixApi: FastPixApi,
         @ApplicationContext appContext: Context
-    ): UploadRepository {
-        return UploadRepository(fastPixApi, appContext)
-    }
+    ): UploadRepository = UploadRepository(fastPixApi, appContext)
 
 }
