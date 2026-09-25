@@ -155,7 +155,7 @@ If the upload fails or the SDKs will not resolve, see [Troubleshooting](#trouble
 
 StreamGate captures media on the device, uploads it straight to FastPix with resumable, direct-to-cloud uploads, and hands you back a shareable HLS playback link.
 
-![How StreamGate uploads video to FastPix: capture, record, or pick a video, preview it in the app, resumable upload to FastPix, FastPix hosts and encodes, then a shareable playback link.](streamgate-workflow.png)
+<Image alt="How StreamGate uploads video to FastPix: capture, record, or pick a video, preview it in the app, resumable upload to FastPix, FastPix hosts and encodes, then a shareable playback link." border={false} src="https://static.fastpix.com/android-streamgate-workflow.png" />
 
 ---
 
